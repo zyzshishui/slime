@@ -15,6 +15,7 @@ class Sample:
     response: Optional[str] = None
     tokens: Optional[list[int]] = None
     response_length: Optional[int] = None
+    completion_tokens: Optional[int] = None
     reward: Optional[float] = None
     loss_mask: Optional[list[int]] = None
     metadata: dict = field(default_factory=dict)

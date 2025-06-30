@@ -254,7 +254,7 @@ def get_slime_extra_args_provider(add_custom_arguments=None):
             parser.add_argument(
                 "--partial-rollout-min-response-length",
                 type=int,
-                default=10,
+                default=0,
                 help=(
                     "Minimum response length (in characters) for a sample to be considered for partial rollout recycling. "
                     "Shorter responses will be discarded."
@@ -263,7 +263,7 @@ def get_slime_extra_args_provider(add_custom_arguments=None):
             parser.add_argument(
                 "--partial-rollout-min-tokens",
                 type=int,
-                default=5,
+                default=0,
                 help=(
                     "Minimum number of tokens in the response for a sample to be considered for partial rollout recycling."
                 ),
@@ -271,7 +271,7 @@ def get_slime_extra_args_provider(add_custom_arguments=None):
             parser.add_argument(
                 "--partial-rollout-mix-ratio",
                 type=float,
-                default=0.3,
+                default=1,
                 help=(
                     "Maximum ratio of partial rollout samples to use in each batch. "
                     "Value between 0.0 and 1.0. Default 0.3 means up to 30% partial samples."

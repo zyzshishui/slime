@@ -40,6 +40,10 @@ def convert_samples_to_train_data(samples: list[Sample]):
         train_data["raw_reward"] = [sample.metadata["raw_reward"] for sample in samples]
     if samples[0].metadata and "round_number" in samples[0].metadata:
         train_data["round_number"] = [sample.metadata["round_number"] for sample in samples]
+    if samples[0].metadata and "rollout_time" in samples[0].metadata:
+        train_data["rollout_time"] = samples[0].metadata["rollout_time"]
+    if samples[0].metadata and "completion_tokens_stats" in samples[0].metadata:
+        train_data["completion_tokens_stats"] = samples[0].metadata["completion_tokens_stats"]
     return train_data
 
 
@@ -183,7 +187,6 @@ class Buffer:
         ), f"Buffer add_samples got {len(samples)} samples, expected {self.args.n_samples_per_prompt}"
 
         self.write_function(self.args, self.buffer, samples, rollout_info)
-        print(f"Buffer size after adding samples: {len(self.buffer)} (adding {len(samples)} samples)", flush=True)
 
     def generate(self, rollout_id, evaluation=False):
         if not evaluation and self.args.load_debug_rollout_data:

@@ -1,11 +1,12 @@
 import asyncio
 import copy
 import json
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Counter, DefaultDict
-
+import numpy as np
 from tqdm import tqdm
 from transformers import AutoTokenizer
 
@@ -25,6 +26,8 @@ class GenerateState:
     remaining_batch_size: int = 0  # the number of samples that are done/running/pending
     pendings: set = None  # the set of pending tasks
     num_stats: DefaultDict[str, Counter] = field(default_factory=lambda: defaultdict(Counter))
+    rollout_start_time: float = None
+    completion_tokens_list: list = field(default_factory=list)
 
     def bump(self, group: str, value: str, n: int):
         self.num_stats[group][value] += n
@@ -89,6 +92,7 @@ async def generate(args, sample: Sample, sampling_params) -> Sample:
         break
 
     prompt_tokens_ids = TOKENIZER(sample.prompt, add_special_tokens=False)["input_ids"]
+    sample.completion_tokens = output["meta_info"]["completion_tokens"]
 
     if is_partial_sample:
         # For partial rollout: combine existing response with new generation
@@ -240,6 +244,7 @@ async def generate_rollout_async(args, rollout_id: int, data_buffer) -> list[Sam
         "rollout_id": rollout_id,
     }
 
+    state.rollout_start_time = time.time()
     pbar = tqdm(total=target_data_size, desc="Rollout generation")
     while len(data) < target_data_size:
         while state.remaining_batch_size < target_data_size // args.n_samples_per_prompt:
@@ -255,6 +260,9 @@ async def generate_rollout_async(args, rollout_id: int, data_buffer) -> list[Sam
         # The assumption here is that group_rm is not too slow.
         for task in done:
             sample = task.result()
+
+            if sample.completion_tokens is not None:
+                state.completion_tokens_list.append(sample.completion_tokens)
 
             # add sample to its group
             group_index = sample.index // args.n_samples_per_prompt
@@ -316,6 +324,7 @@ async def generate_rollout_async(args, rollout_id: int, data_buffer) -> list[Sam
             for task in done:
                 sample = task.result()
                 update_num_stats(state, "output", sample.status)
+                state.completion_tokens_list.append(sample.completion_tokens)
 
                 group_index = sample.index // args.n_samples_per_prompt
                 if group_index not in data_group:
@@ -335,7 +344,6 @@ async def generate_rollout_async(args, rollout_id: int, data_buffer) -> list[Sam
             if len(cached_samples) > 0:
                 # Add cached samples back to buffer for next iteration
                 await data_buffer.add_samples(cached_samples, rollout_info)
-                print(f"[DEBUG] Rollout {rollout_id}: Cached {len(cached_samples)} samples back to buffer", flush=True)
 
     if over_sampling_filter is not None:
         update_num_stats(
@@ -345,7 +353,26 @@ async def generate_rollout_async(args, rollout_id: int, data_buffer) -> list[Sam
     else:
         data.sort(key=lambda sample: sample.index)
 
+    rollout_time = time.time() - state.rollout_start_time
+
+    completion_tokens_stats = {}
+    completion_tokens_array = np.array(state.completion_tokens_list)
+    completion_tokens_stats = {
+        'total_completion_tokens': np.sum(completion_tokens_array).item(),
+        'completion_tokens_mean': np.mean(completion_tokens_array).item(),
+        'completion_tokens_std': np.std(completion_tokens_array).item(),
+        'completion_tokens_count': len(completion_tokens_array),
+    }
+    
+    if len(data) > 0:
+        data[0].metadata.update({
+            'rollout_time': rollout_time,
+            'completion_tokens_stats': completion_tokens_stats,
+        })
+
     print(f"[DEBUG] Rollout {rollout_id}: {state.stats_to_string()}", flush=True)
+    if completion_tokens_stats:
+        print(f"[DEBUG] Rollout {rollout_id}: Completion tokens stats: {completion_tokens_stats}", flush=True)
     assert (
         len(data) == args.rollout_batch_size * args.n_samples_per_prompt
     ), f"Got {len(data)} samples, expected {args.rollout_batch_size * args.n_samples_per_prompt}"
