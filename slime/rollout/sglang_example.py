@@ -93,11 +93,11 @@ async def generate(args, sample: Sample, sampling_params, evaluation=False) -> S
         "sampling_params": sampling_params,
     }
 
-        output = await post(url, payload, use_http2=args.use_http2)
-        sample.response += output["text"]
-        sample.completion_tokens = output["meta_info"]["completion_tokens"]
-        if not evaluation:
-            state.completion_tokens_list.append(sample.completion_tokens)
+    output = await post(url, payload, use_http2=args.use_http2)
+    sample.response += output["text"]
+    sample.completion_tokens = output["meta_info"]["completion_tokens"]
+    if not evaluation:
+        state.completion_tokens_list.append(sample.completion_tokens)
 
     if output["meta_info"]["finish_reason"]["type"] == "abort":
         sample.status = Sample.Status.ABORTED
