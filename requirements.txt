@@ -1,6 +1,8 @@
 accelerate
 httpx[http2]
+matplotlib
 mcp[cli]
+numpy
 pylatexenc
 ray[default]
 sglang
