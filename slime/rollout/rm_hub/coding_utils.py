@@ -77,7 +77,7 @@ async def evaluate_coding_solution(response: str, label: str) -> float:
         
         correct = 0
         total = 0
-        for i in range(min_cases):
+        for i in range(len(inputs)):
             input_data = inputs[i]
             expected_output = normalize_output(expected_outputs[i])
             success, actual_output, error = await run_code_with_input(code, input_data)
