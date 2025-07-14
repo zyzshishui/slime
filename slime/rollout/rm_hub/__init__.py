@@ -11,6 +11,7 @@ from .f1 import f1_score
 from .math_dapo_utils import compute_score as compute_score_dapo
 from .math_utils import extract_answer as extract_boxed_answer
 from .math_utils import grade_answer_verl
+from .coding_utils import evaluate_coding_solution
 
 
 async def remote_rm(args, sample: Sample):
@@ -50,8 +51,10 @@ async def async_rm(args, sample: Sample, **kwargs):
         return 1 if grade_answer_verl(response, label) else 0
     elif rm_type == "f1":
         return f1_score(response, label)[0]
+    elif rm_type == "coding":
+        return await evaluate_coding_solution(response, label)
     else:
-        raise NotImplementedError(f"Rule-based RM for {type} is not implemented.")
+        raise NotImplementedError(f"Rule-based RM for {rm_type} is not implemented.")
 
 
 async def batched_async_rm(
