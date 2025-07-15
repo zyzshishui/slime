@@ -36,18 +36,19 @@ CKPT_ARGS=(
 )
 
 ROLLOUT_ARGS=(
-   --prompt-data /root/coding_data/train/train.jsonl
+   --prompt-data /root/coding_dataset/train.jsonl
    --input-key prompt
    --label-key input_output
+   --apply-chat-template
    --rollout-shuffle
    --rm-type coding
    --num-epoch 1
-   --rollout-batch-size 4
+   --rollout-batch-size 32
    --n-samples-per-prompt 4
-   --rollout-max-response-len 32768
+   --rollout-max-response-len 16384
    --rollout-temperature 0.8
 
-   --global-batch-size 16
+   --global-batch-size 128
    --balance-data
    # --partial-rollout
    # --over-sampling-batch-size 64
@@ -55,13 +56,13 @@ ROLLOUT_ARGS=(
 
 EVAL_ARGS=(
    --eval-interval 10
-   --eval-prompt-data Codeforces /root/coding_data/code_benchmark/codeforces/test.jsonl \
-                      LiveCodeBench /root/coding_data/code_benchmark/lcb_v5_2410_2502/test.jsonl \
-                      CodeContests /root/coding_data/code_benchmark/code_contest_all/test.jsonl
-   --eval-input-key question
+   --eval-prompt-data Codeforces /root/coding_dataset/codeforces.jsonl \
+                      LiveCodeBench /root/coding_dataset/lcb_v5_2410_2502.jsonl \
+                      CodeContests /root/coding_dataset/code_contest_all.jsonl
+   --eval-input-key prompt
    --eval-label-key input_output
    --n-samples-per-eval-prompt 2
-   --eval-max-response-len 32768
+   --eval-max-response-len 16384
    --eval-top-p 0.7
 )
 
@@ -79,7 +80,7 @@ PERF_ARGS=(
 
    # --micro-batch-size 1
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 4096
+   --max-tokens-per-gpu 8192
 )
 
 GRPO_ARGS=(

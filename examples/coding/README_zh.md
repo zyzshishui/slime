@@ -14,11 +14,16 @@ git clone https://github.com/THUDM/slime.git
 pip install -e .
 ```
 
-下载数据：
+下载并处理数据：
 
 ```bash
-huggingface-cli download --repo-type dataset inclusionAI/AReaL-boba-2-RL-Code \
-  --local-dir /root/coding_data
+huggingface-cli download --repo-type dataset inclusionAI/AReaL-boba-2-RL-Code --local-dir /root/coding_data
+
+python examples/coding/convert_datasets.py
+```
+或直接下载处理好的数据：
+```bash
+huggingface-cli download --repo-type dataset zyzshishui0627/AReaL-boba-2-RL-Code-openai-format --local-dir /root/coding_dataset
 ```
 
 初始化 Qwen3-4B 模型：
