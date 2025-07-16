@@ -52,7 +52,7 @@ async def async_rm(args, sample: Sample, **kwargs):
     elif rm_type == "f1":
         return f1_score(response, label)[0]
     elif rm_type == "coding":
-        return await evaluate_coding_solution(response, label)
+        return evaluate_coding_solution(response, label)
     else:
         raise NotImplementedError(f"Rule-based RM for {rm_type} is not implemented.")
 
