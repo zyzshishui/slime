@@ -8,6 +8,26 @@ from typing import Dict, List, Any, Optional
 import concurrent.futures
 import time
 from functools import partial
+import logging
+
+CODE_EVAL_EXECUTOR: Optional[concurrent.futures.ProcessPoolExecutor] = None
+
+def initialize_coding_executor(max_workers: Optional[int] = None):
+    global CODE_EVAL_EXECUTOR
+    if CODE_EVAL_EXECUTOR is None:
+        if max_workers is None:
+            max_workers = os.cpu_count()
+        logging.info(f"Initializing global ProcessPoolExecutor for coding evaluation with {max_workers} workers.")
+        CODE_EVAL_EXECUTOR = concurrent.futures.ProcessPoolExecutor(max_workers=max_workers)
+    else:
+        logging.warning("Coding executor has already been initialized.")
+
+
+def shutdown_coding_executor():
+    global CODE_EVAL_EXECUTOR
+    if CODE_EVAL_EXECUTOR is not None:
+        CODE_EVAL_EXECUTOR.shutdown(wait=True)
+        CODE_EVAL_EXECUTOR = None
 
 
 def extract_code_from_response(response: str) -> Optional[str]:
@@ -55,34 +75,51 @@ def normalize_output(output: str) -> str:
     return output.strip().rstrip('\n')
 
 
-def eval_one(args, code):
-    input_data, expected_output = args
+def eval_one(code: str, input_data: str, expected_output: str) -> int:
     expected_output_norm = normalize_output(expected_output)
     success, actual_output, error = run_code_with_input(code, input_data)
-    if success:
-        actual_output_norm = normalize_output(actual_output)
-        if actual_output_norm == expected_output_norm:
-            return 1
+    if not success:
+        print(f"[DEBUG] Error running code: {error}")
+        return 0
+    actual_output_norm = normalize_output(actual_output)
+    if actual_output_norm == expected_output_norm:
+        return 1
     return 0
 
 
-def evaluate_coding_solution(response: str, label: str, max_workers: int = 4) -> float:
+async def evaluate_coding_solution(response: str, label: str, max_workers: int = 4, executor=None) -> float:
+    global CODE_EVAL_EXECUTOR
+    if CODE_EVAL_EXECUTOR is None:
+        initialize_coding_executor()
+
     code = extract_code_from_response(response)
     if not code:
         return 0.0
+
     try:
         test_data = json.loads(label)
         inputs = test_data.get('inputs', [])
         expected_outputs = test_data.get('outputs', [])
+
         if not inputs or not expected_outputs:
             return 0.0
         assert len(inputs) == len(expected_outputs), "Number of inputs and expected outputs must match"
-        correct = 0
-        total = len(inputs)
-        num_process = max(1, os.cpu_count() // 8)
-        with concurrent.futures.ProcessPoolExecutor(max_workers=num_process) as executor:
-            results = list(executor.map(partial(eval_one, code=code), zip(inputs, expected_outputs)))
-        score = sum(results) / total if total > 0 else 0.0
+
+        total_cases = len(inputs)
+        loop = asyncio.get_running_loop()
+        tasks = [
+            loop.run_in_executor(
+                CODE_EVAL_EXECUTOR,
+                eval_one,
+                code,
+                input_data, 
+                expected_output
+            )
+            for input_data, expected_output in zip(inputs, expected_outputs)
+        ]
+
+        results = await asyncio.gather(*tasks)
+        score = sum(results) / total_cases if total_cases > 0 else 0.0
         return score
     except json.JSONDecodeError as e:
         print(f"[DEBUG] JSON decode error: {e}")
