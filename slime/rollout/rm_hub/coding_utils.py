@@ -6,6 +6,7 @@ import ast
 import faulthandler
 import sys
 import platform
+import signal
 from typing import Optional
 import concurrent.futures
 import logging
@@ -222,19 +223,23 @@ def run_test(input_output, code=None, timeout=6):
 
     if which_type == CODE_TYPE.call_based:
         sol += code
+        signal.alarm(timeout)
         try:
             tmp_sol = RuntimeModule.from_string("tmp_sol", sol, "")
             if "class Solution" not in code:
                 tmp = tmp_sol
             else:
                 tmp = tmp_sol.Solution()
+            signal.alarm(0)
         except Exception as e:
+            signal.alarm(0)
             results.append(-2)
             return results, {
                 "error": repr(e),
                 "error_code": -1,
                 "error_message": "Compilation Error",
             }
+        signal.alarm(0)
 
     elif which_type == CODE_TYPE.standard_input:
         try:
@@ -276,20 +281,24 @@ def run_test(input_output, code=None, timeout=6):
 
         sol += tmp_test
         method_name = "code"
+        signal.alarm(timeout)
         try:
             tmp_sol = RuntimeModule.from_string("tmp_sol", sol, "")
             tmp = tmp_sol
+            signal.alarm(0)
         except Exception as e:
+            signal.alarm(0)
             results.append(-2)
             return results, {
                 "error": repr(e),
                 "error_code": -1,
                 "error_message": "Compilation Error",
             }
-    
+        signal.alarm(0)
     try:
         method = getattr(tmp, method_name)
     except:
+        signal.alarm(0)
         e = sys.exc_info()
         print(f"unable to get function error = {e}")
         results.append(-2)
@@ -304,6 +313,7 @@ def run_test(input_output, code=None, timeout=6):
         raw_outputs = in_outs["outputs"][index]
         
         if which_type == CODE_TYPE.call_based:
+            signal.alarm(timeout)
             inputs = [json.loads(line) for line in inputs.split("\n")]
             expected_output = json.loads(in_outs["outputs"][index])
             raw_inputs = "\n".join(line for line in raw_inputs.strip().split("\n"))
@@ -367,7 +377,9 @@ def run_test(input_output, code=None, timeout=6):
                         "error_code": -2,
                         "error_message": "Wrong Answer",
                     }
+                signal.alarm(0)
             except Exception as e:
+                signal.alarm(0)
                 faulthandler.disable()
                 print(f"Call-based runtime error or time limit exceeded error = {repr(e)}{e}")
                 results.append(-1)
@@ -388,19 +400,22 @@ def run_test(input_output, code=None, timeout=6):
                         "expected": raw_outputs,
                     }
             faulthandler.disable()
-        
+            signal.alarm(0)
         elif which_type == CODE_TYPE.standard_input:
             faulthandler.enable()
             passed = False
 
             if isinstance(inputs, list):
                 inputs = "\n".join(inputs)
-
+            
+            signal.alarm(timeout)
             with Capturing() as output:
                 try:
                     call_method(method, inputs)
+                    signal.alarm(0)
                     passed = True
                 except Exception as e:
+                    signal.alarm(0)
                     print(f"Standard input runtime error or time limit exceeded error = {repr(e)}{e}")
                     results.append(-1)
                     if "timeoutexception" in repr(e).lower():
@@ -419,7 +434,7 @@ def run_test(input_output, code=None, timeout=6):
                             "inputs": raw_inputs,
                             "expected": raw_outputs,
                         }
-            
+                signal.alarm(0)
             raw_true_output = output
             output = raw_true_output
             if not passed:
@@ -589,13 +604,12 @@ async def evaluate_coding_solution(response: str, label: str) -> float:
 
     try:
         loop = asyncio.get_running_loop()
-        future = loop.run_in_executor(
+        result = await loop.run_in_executor(
             CODE_EVAL_EXECUTOR,
             evaluate_one,
             code,
             label
         )
-        result = await asyncio.wait_for(future, timeout=SINGLE_CASE_EXEC_TIMEOUT + 1)
         return float(result)
         
     except asyncio.TimeoutError:
