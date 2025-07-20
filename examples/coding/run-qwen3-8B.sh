@@ -25,14 +25,14 @@ fi
 echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-source "${SCRIPT_DIR}/../../scripts/models/qwen3-4B.sh"
+source "${SCRIPT_DIR}/../../scripts/models/qwen3-8B.sh"
 
 CKPT_ARGS=(
-   --hf-checkpoint /root/Qwen3-4B
-   #--hf-checkpoint /root/Qwen3-4B-FP8
-   --ref-load /root/Qwen3-4B_torch_dist
-   --load /root/Qwen3-4B_slime/
-   --save /root/Qwen3-4B_slime/
+   --hf-checkpoint /root/Qwen3-8B
+   #--hf-checkpoint /root/Qwen3-8B-FP8
+   --ref-load /root/Qwen3-8B_torch_dist
+   --load /root/Qwen3-8B_slime/
+   --save /root/Qwen3-8B_slime/
    --save-interval 20
 )
 
@@ -44,12 +44,12 @@ ROLLOUT_ARGS=(
    --rollout-shuffle
    --rm-type coding
    --num-epoch 1
-   --rollout-batch-size 16
+   --rollout-batch-size 128
    --n-samples-per-prompt 16
    --rollout-max-response-len 27648
    --rollout-temperature 1.0
 
-   --global-batch-size 256
+   --global-batch-size 2048
    --balance-data
    # --partial-rollout
    # --over-sampling-batch-size 64
@@ -57,7 +57,7 @@ ROLLOUT_ARGS=(
 
 EVAL_ARGS=(
    --eval-interval 10
-   --eval-prompt-data CodeContests /root/coding_dataset/code_contest_all.jsonl
+   --eval-prompt-data LiveCodeBench /root/coding_dataset/lcb_v5_2410_2502.json
    # --eval-prompt-data Codeforces /root/coding_dataset/codeforces.jsonl \
    #                    LiveCodeBench /root/coding_dataset/lcb_v5_2410_2502.jsonl \
    #                    CodeContests /root/coding_dataset/code_contest_all.jsonl
@@ -107,7 +107,7 @@ OPTIMIZER_ARGS=(
 
 WANDB_ARGS=(
    --use-wandb
-   --wandb-project Qwen3-4B-Coding
+   --wandb-project Qwen3-8B-Coding
    --wandb-group test
    --wandb-key ${WANDB_API_KEY}
 )
