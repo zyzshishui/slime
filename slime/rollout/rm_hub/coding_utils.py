@@ -6,11 +6,11 @@ import sys
 import platform
 import signal
 from typing import Optional
-import logging
 from unittest.mock import patch, mock_open
 from io import StringIO
 from contextlib import contextmanager  
 import argparse
+
 
 SINGLE_CASE_EXEC_TIMEOUT = 6
 
@@ -131,7 +131,7 @@ class Capturing(list):
         sys.stdout = self._stdout
 
 
-def call_method(method, inputs):
+def call_method(method, inputs, tmp_id=0):
     if isinstance(inputs, list):
         inputs = "\n".join(inputs)
     inputs_line_iterator = iter(inputs.split("\n"))
@@ -145,7 +145,7 @@ def call_method(method, inputs):
         try:
             return _method()
         except SystemExit as e:
-            logging.error(f"SystemExit in call_method: {e}")
+            print(f"[CODE_EVAL_EXECUTOR {tmp_id}] SystemExit: {e}", flush=True)
         finally:
             pass
     return _inner_call_method(method)
@@ -185,7 +185,7 @@ class RuntimeModule:
         return module
 
 
-def run_test(input_output, code=None, timeout=6):
+def run_test(input_output, code=None, timeout=6, tmp_id=0):
     reliability_guard()
 
     try:
@@ -276,7 +276,7 @@ def run_test(input_output, code=None, timeout=6):
     try:
         method = getattr(tmp, method_name)
     except:
-        print(f"unable to get function error = {e}")
+        print(f"[CODE_EVAL_EXECUTOR {tmp_id}] Unable to get function error = {e}", flush=True)
         results.append(-2)
         return results, {
             "error": repr(e),
@@ -356,7 +356,7 @@ def run_test(input_output, code=None, timeout=6):
                         }
             except Exception as e:
                 faulthandler.disable()
-                print(f"Call-based runtime error or time limit exceeded error = {repr(e)}{e}")
+                print(f"[CODE_EVAL_EXECUTOR {tmp_id}] Call-based runtime error or time limit exceeded error = {repr(e)}{e}", flush=True)
                 results.append(-1)
                 if "timeoutexception" in repr(e).lower():
                     return results, {
@@ -388,7 +388,7 @@ def run_test(input_output, code=None, timeout=6):
                         call_method(method, inputs)
                         passed = True
                     except Exception as e:
-                        print(f"Standard input runtime error or time limit exceeded error = {repr(e)}{e}")
+                        print(f"[CODE_EVAL_EXECUTOR {tmp_id}] Standard input runtime error or time limit exceeded error = {repr(e)}{e}", flush=True)
                         results.append(-1)
                         if "timeoutexception" in repr(e).lower():
                             return results, {
@@ -556,6 +556,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-file", required=True, help="Path to the input JSON file.")
     parser.add_argument("--output-file", required=True, help="Path to the output JSON file.")
+    parser.add_argument("--tmp-id", required=True, help="Temporary ID for the code evaluation.")
     args = parser.parse_args()
 
     try:
@@ -569,7 +570,7 @@ def main():
         if not code:
             result = 0
         else:
-            results, _ = run_test(input_output=label, code=code, timeout=SINGLE_CASE_EXEC_TIMEOUT)
+            results, _ = run_test(input_output=label, code=code, timeout=SINGLE_CASE_EXEC_TIMEOUT, tmp_id=args.tmp_id)
             
             if any(res != True for res in results):
                 result = 0
@@ -577,7 +578,7 @@ def main():
                 result = 1
 
     except Exception as e:
-        print(f"Error in safe_code_runner: {e}", file=sys.stderr)
+        print(f"[CODE_EVAL_EXECUTOR {args.tmp_id}] Error: {e}", flush=True)
         result = 0
 
     with open(args.output_file, 'w') as f:
