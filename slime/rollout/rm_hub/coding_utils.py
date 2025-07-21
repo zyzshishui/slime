@@ -1,42 +1,33 @@
-import asyncio
 import json
 import re
-import os
 import ast
 import faulthandler
 import sys
 import platform
 import signal
 from typing import Optional
-import concurrent.futures
 import logging
 from unittest.mock import patch, mock_open
 from io import StringIO
+from contextlib import contextmanager  
+import argparse
 
-CODE_EVAL_EXECUTOR: Optional[concurrent.futures.ProcessPoolExecutor] = None
 SINGLE_CASE_EXEC_TIMEOUT = 6
 
 class CODE_TYPE:
     call_based = "call_based"
     standard_input = "standard_input"
 
-def initialize_coding_executor(max_workers: Optional[int] = None):
-    global CODE_EVAL_EXECUTOR
-    if CODE_EVAL_EXECUTOR is None:
-        if max_workers is None:
-            max_workers = max(1, os.cpu_count() // 2)
-        logging.info(f"Initializing global ProcessPoolExecutor for coding evaluation with {max_workers} workers.")
-        CODE_EVAL_EXECUTOR = concurrent.futures.ProcessPoolExecutor(max_workers=max_workers)
-    else:
-        logging.warning("Coding executor has already been initialized.")
 
-
-def shutdown_coding_executor():
-    global CODE_EVAL_EXECUTOR
-    if CODE_EVAL_EXECUTOR is not None:
-        CODE_EVAL_EXECUTOR.shutdown(wait=True)
-        CODE_EVAL_EXECUTOR = None
-
+@contextmanager 
+def _alarm(sec: int):
+    if sec:
+        signal.alarm(sec)
+    try:
+        yield
+    finally:   
+        signal.alarm(0)
+        
 
 def extract_code_from_response(response: str) -> Optional[str]:
     python_code_pattern = r'```python\s*\n(.*?)\n```'
@@ -223,23 +214,20 @@ def run_test(input_output, code=None, timeout=6):
 
     if which_type == CODE_TYPE.call_based:
         sol += code
-        signal.alarm(timeout)
-        try:
-            tmp_sol = RuntimeModule.from_string("tmp_sol", sol, "")
-            if "class Solution" not in code:
-                tmp = tmp_sol
-            else:
-                tmp = tmp_sol.Solution()
-            signal.alarm(0)
-        except Exception as e:
-            signal.alarm(0)
-            results.append(-2)
-            return results, {
-                "error": repr(e),
-                "error_code": -1,
-                "error_message": "Compilation Error",
-            }
-        signal.alarm(0)
+        with _alarm(timeout):
+            try:
+                tmp_sol = RuntimeModule.from_string("tmp_sol", sol, "")
+                if "class Solution" not in code:
+                    tmp = tmp_sol
+                else:
+                    tmp = tmp_sol.Solution()
+            except Exception as e:
+                results.append(-2)
+                return results, {
+                    "error": repr(e),
+                    "error_code": -1,
+                    "error_message": "Compilation Error",
+                }
 
     elif which_type == CODE_TYPE.standard_input:
         try:
@@ -281,25 +269,13 @@ def run_test(input_output, code=None, timeout=6):
 
         sol += tmp_test
         method_name = "code"
-        signal.alarm(timeout)
-        try:
+        with _alarm(timeout):
             tmp_sol = RuntimeModule.from_string("tmp_sol", sol, "")
             tmp = tmp_sol
-            signal.alarm(0)
-        except Exception as e:
-            signal.alarm(0)
-            results.append(-2)
-            return results, {
-                "error": repr(e),
-                "error_code": -1,
-                "error_message": "Compilation Error",
-            }
-        signal.alarm(0)
+
     try:
         method = getattr(tmp, method_name)
     except:
-        signal.alarm(0)
-        e = sys.exc_info()
         print(f"unable to get function error = {e}")
         results.append(-2)
         return results, {
@@ -313,9 +289,9 @@ def run_test(input_output, code=None, timeout=6):
         raw_outputs = in_outs["outputs"][index]
         
         if which_type == CODE_TYPE.call_based:
-            signal.alarm(timeout)
-            inputs = [json.loads(line) for line in inputs.split("\n")]
-            expected_output = json.loads(in_outs["outputs"][index])
+            with _alarm(timeout):
+                inputs = [json.loads(line) for line in inputs.split("\n")]
+                expected_output = json.loads(in_outs["outputs"][index])
             raw_inputs = "\n".join(line for line in raw_inputs.strip().split("\n"))
         
         try:
@@ -343,43 +319,42 @@ def run_test(input_output, code=None, timeout=6):
         if which_type == CODE_TYPE.call_based:
             faulthandler.enable()
             try:
-                output = method(*inputs)
-                raw_true_output = output
+                with _alarm(timeout):
+                    output = method(*inputs)
+                    raw_true_output = output
 
-                raw_true_output = json.dumps(output)
-                if isinstance(output, tuple):
-                    output = list(output)
+                    raw_true_output = json.dumps(output)
+                    if isinstance(output, tuple):
+                        output = list(output)
 
-                tmp_result = output == expected_output
-                if (
-                    isinstance(expected_output, list)
-                    and expected_output
-                ):
-                    tmp_result = tmp_result or (
-                        output == expected_output[0]
-                    )
-
-                try:
-                    if isinstance(output[0], tuple):
+                    tmp_result = output == expected_output
+                    if (
+                        isinstance(expected_output, list)
+                        and expected_output
+                    ):
                         tmp_result = tmp_result or (
-                            [list(x) for x in output]
-                            == expected_output[0]
+                            output == expected_output[0]
                         )
-                except:
-                    pass
-                
-                results.append(tmp_result)
-                if not tmp_result:
-                    return results, {
-                        "output": raw_true_output,
-                        "expected": raw_outputs,
-                        "inputs": raw_inputs,
-                        "error_code": -2,
-                        "error_message": "Wrong Answer",
-                    }
-                signal.alarm(0)
+
+                    try:
+                        if isinstance(output[0], tuple):
+                            tmp_result = tmp_result or (
+                                [list(x) for x in output]
+                                == expected_output[0]
+                            )
+                    except:
+                        pass
+                    
+                    results.append(tmp_result)
+                    if not tmp_result:
+                        return results, {
+                            "output": raw_true_output,
+                            "expected": raw_outputs,
+                            "inputs": raw_inputs,
+                            "error_code": -2,
+                            "error_message": "Wrong Answer",
+                        }
             except Exception as e:
-                signal.alarm(0)
                 faulthandler.disable()
                 print(f"Call-based runtime error or time limit exceeded error = {repr(e)}{e}")
                 results.append(-1)
@@ -400,7 +375,6 @@ def run_test(input_output, code=None, timeout=6):
                         "expected": raw_outputs,
                     }
             faulthandler.disable()
-            signal.alarm(0)
         elif which_type == CODE_TYPE.standard_input:
             faulthandler.enable()
             passed = False
@@ -408,33 +382,30 @@ def run_test(input_output, code=None, timeout=6):
             if isinstance(inputs, list):
                 inputs = "\n".join(inputs)
             
-            signal.alarm(timeout)
-            with Capturing() as output:
-                try:
-                    call_method(method, inputs)
-                    signal.alarm(0)
-                    passed = True
-                except Exception as e:
-                    signal.alarm(0)
-                    print(f"Standard input runtime error or time limit exceeded error = {repr(e)}{e}")
-                    results.append(-1)
-                    if "timeoutexception" in repr(e).lower():
-                        return results, {
-                            "error": repr(e),
-                            "error_code": -3,
-                            "error_message": "Time Limit Exceeded",
-                            "inputs": raw_inputs,
-                            "expected": raw_outputs,
-                        }
-                    else:
-                        return results, {
-                            "error": repr(e),
-                            "error_code": -4,
-                            "error_message": "Runtime Error",
-                            "inputs": raw_inputs,
-                            "expected": raw_outputs,
-                        }
-                signal.alarm(0)
+            with _alarm(timeout):
+                with Capturing() as output:
+                    try:
+                        call_method(method, inputs)
+                        passed = True
+                    except Exception as e:
+                        print(f"Standard input runtime error or time limit exceeded error = {repr(e)}{e}")
+                        results.append(-1)
+                        if "timeoutexception" in repr(e).lower():
+                            return results, {
+                                "error": repr(e),
+                                "error_code": -3,
+                                "error_message": "Time Limit Exceeded",
+                                "inputs": raw_inputs,
+                                "expected": raw_outputs,
+                            }
+                        else:
+                            return results, {
+                                "error": repr(e),
+                                "error_code": -4,
+                                "error_message": "Runtime Error",
+                                "inputs": raw_inputs,
+                                "expected": raw_outputs,
+                            }
             raw_true_output = output
             output = raw_true_output
             if not passed:
@@ -581,41 +552,37 @@ def run_test(input_output, code=None, timeout=6):
     return results, {}
 
 
-def evaluate_one(code: str, input_output: str) -> int:
-    try:
-        results, _ = run_test(input_output, code=code, timeout=SINGLE_CASE_EXEC_TIMEOUT)
-
-        if any(result != True for result in results):
-            return 0
-        return 1
-    except Exception as e:
-        logging.error(f"Error in eval_one: {e}")
-        return 0
-
-
-async def evaluate_coding_solution(response: str, label: str) -> float:
-    global CODE_EVAL_EXECUTOR
-    if CODE_EVAL_EXECUTOR is None:
-        initialize_coding_executor()
-
-    code = extract_code_from_response(response)
-    if not code:
-        return 0.0
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input-file", required=True, help="Path to the input JSON file.")
+    parser.add_argument("--output-file", required=True, help="Path to the output JSON file.")
+    args = parser.parse_args()
 
     try:
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(
-            CODE_EVAL_EXECUTOR,
-            evaluate_one,
-            code,
-            label
-        )
-        return float(result)
+        with open(args.input_file, 'r') as f:
+            data = json.load(f)
         
-    except asyncio.TimeoutError:
-        logging.warning("Coding evaluation timed out.")
-        return 0.0
+        response = data['response']
+        label = data['label']
+
+        code = extract_code_from_response(response)
+        if not code:
+            result = 0
+        else:
+            results, _ = run_test(input_output=label, code=code, timeout=SINGLE_CASE_EXEC_TIMEOUT)
             
+            if any(res != True for res in results):
+                result = 0
+            else:
+                result = 1
+
     except Exception as e:
-        logging.error(f"Exception in coding evaluation: {e}")
-        return 0.0
+        print(f"Error in safe_code_runner: {e}", file=sys.stderr)
+        result = 0
+
+    with open(args.output_file, 'w') as f:
+        json.dump({'score': float(result)}, f)
+
+
+if __name__ == "__main__":
+    main()

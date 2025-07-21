@@ -11,7 +11,7 @@ from .f1 import f1_score
 from .math_dapo_utils import compute_score as compute_score_dapo
 from .math_utils import extract_answer as extract_boxed_answer
 from .math_utils import grade_answer_verl
-from .coding_utils import evaluate_coding_solution
+from .code_runner import evaluate_coding_solution
 
 
 async def remote_rm(args, sample: Sample):
