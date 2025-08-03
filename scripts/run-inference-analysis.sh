@@ -33,11 +33,11 @@ CKPT_ARGS=(
    --load /root/Qwen3-4B_slime/
    --save /root/Qwen3-4B_slime/
    --save-interval 20
-   --start-rollout-id 113
+   --start-rollout-id 0
 )
 
 ROLLOUT_ARGS=(
-   --prompt-data /root/dapo-math-17k/dapo-math-17k.jsonl
+   --prompt-data /root/DeepMath/deepmath-103k.jsonl
    --input-key prompt
    --label-key label
    --apply-chat-template
@@ -52,7 +52,7 @@ ROLLOUT_ARGS=(
    --global-batch-size 512
    --balance-data
    --debug-rollout-only
-   --save-debug-rollout-data /root/inference_data/rollout_data_{rollout_id}.pt
+   --save-debug-rollout-data /root/DeepMath_inference_data/rollout_data_{rollout_id}.pt
 )
 
 PERF_ARGS=(
@@ -75,7 +75,7 @@ PERF_ARGS=(
 SGLANG_ARGS=(
    --rollout-num-gpus 8
    --rollout-num-gpus-per-engine 2
-   --sglang-mem-fraction-static 0.7
+   --sglang-mem-fraction-static 0.8
 )
 
 MISC_ARGS=(

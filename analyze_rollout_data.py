@@ -1,22 +1,13 @@
-#!/usr/bin/env python3
-"""
-Script to analyze rollout data and visualize response length statistics.
-Enhanced with within-group correlation analysis and detailed explanations.
-"""
-
 import pickle
 import os
 import glob
-from collections import defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 from tqdm import tqdm
 import pandas as pd
-from scipy import stats
-from itertools import combinations
 
-def load_rollout_data(data_dir="/root/inference_data"):
+def load_rollout_data(data_dir="/root/DeepMath_inference_data"):
     """Load all rollout data files from the specified directory."""
     rollout_files = glob.glob(os.path.join(data_dir, "rollout_data_*.pt"))
     rollout_files.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
@@ -240,8 +231,7 @@ def create_visualizations(prompt_stats, correlation_analysis):
     print("  用途：量化同一Prompt内response长度的分散程度")
     
     plt.tight_layout()
-    plt.savefig('rollout_response_analysis.png', dpi=300, bbox_inches='tight')
-    print(f"\n可视化图表已保存为 'rollout_response_analysis.png'")
+    plt.savefig('deepmath.png', dpi=300, bbox_inches='tight')
     
     return fig
 
@@ -318,7 +308,7 @@ def print_summary_statistics(prompt_stats, correlation_analysis):
         mean_reward = prompt_stats[pid]['mean_reward']
         print(f"  Prompt {pid}: mean={mean_len:.1f}, CV={cv:.3f}, reward={mean_reward:.2f}")
 
-def save_detailed_results(prompt_stats, correlation_analysis, output_file="rollout_analysis_detailed.csv"):
+def save_detailed_results(prompt_stats, correlation_analysis, output_file="deepmath.csv"):
     """Save detailed analysis results to CSV file."""
     
     data = []
@@ -381,8 +371,8 @@ def main():
     print("ANALYSIS COMPLETE!")
     print("="*80)
     print("Generated files:")
-    print("  - rollout_response_analysis.png (enhanced visualization with 9 charts)")
-    print("  - rollout_analysis_detailed.csv (detailed statistics)")
+    print("  - deepmath.png (enhanced visualization with 9 charts)")
+    print("  - deepmath.csv (detailed statistics)")
     print("\n关键发现将在上述统计信息中显示")
 
 if __name__ == "__main__":
