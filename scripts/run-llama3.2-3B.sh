@@ -24,15 +24,14 @@ fi
 echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-source "${SCRIPT_DIR}/models/qwen3-4B.sh"
+source "${SCRIPT_DIR}/models/llama3.2-3B.sh"
 
 CKPT_ARGS=(
-   --hf-checkpoint /root/Qwen3-4B
-   #--hf-checkpoint /root/Qwen3-4B-FP8
-   --ref-load /root/Qwen3-4B_torch_dist
-   --load /root/Qwen3-4B_slime/
-   --save /root/Qwen3-4B_slime/
-   --save-interval 50
+   --hf-checkpoint /root/Llama-3.2-3B
+   --ref-load /root/Llama-3.2-3B_torch_dist
+   --load /root/Llama-3.2-3B_slime/
+   --save /root/Llama-3.2-3B_slime/
+   --save-interval 500
 )
 
 ROLLOUT_ARGS=(
@@ -41,12 +40,12 @@ ROLLOUT_ARGS=(
    --label-key label
    --apply-chat-template
    --rollout-shuffle
-   --rm-type deepscaler
+   --rm-type math
    --num-epoch 1
    --rollout-batch-size 32
    --n-samples-per-prompt 8
    --rollout-max-response-len 16384
-   --rollout-temperature 0.8
+   --rollout-temperature 1.0
 
    --global-batch-size 256
    --balance-data
@@ -101,7 +100,7 @@ OPTIMIZER_ARGS=(
 WANDB_ARGS=(
    --use-wandb
    --wandb-project debug
-   --wandb-group dapo-h100
+   --wandb-group h200-llama3.2-3B
    --wandb-key ${WANDB_API_KEY}
 )
 

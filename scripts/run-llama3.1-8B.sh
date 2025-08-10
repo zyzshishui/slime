@@ -24,14 +24,13 @@ fi
 echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-source "${SCRIPT_DIR}/models/qwen3-4B.sh"
+source "${SCRIPT_DIR}/models/llama3.1-8B.sh"
 
 CKPT_ARGS=(
-   --hf-checkpoint /root/Qwen3-4B
-   #--hf-checkpoint /root/Qwen3-4B-FP8
-   --ref-load /root/Qwen3-4B_torch_dist
-   --load /root/Qwen3-4B_slime/
-   --save /root/Qwen3-4B_slime/
+   --hf-checkpoint /root/Llama-3.1-8B
+   --ref-load /root/Llama-3.1-8B_torch_dist
+   --load /root/Llama-3.1-8B_slime/
+   --save /root/Llama-3.1-8B_slime/
    --save-interval 50
 )
 
@@ -41,7 +40,7 @@ ROLLOUT_ARGS=(
    --label-key label
    --apply-chat-template
    --rollout-shuffle
-   --rm-type deepscaler
+   --rm-type math
    --num-epoch 1
    --rollout-batch-size 32
    --n-samples-per-prompt 8
@@ -100,8 +99,8 @@ OPTIMIZER_ARGS=(
 
 WANDB_ARGS=(
    --use-wandb
-   --wandb-project debug
-   --wandb-group dapo-h100
+   --wandb-project llama3.1-8B-training
+   --wandb-group llama3.1-8B-grpo
    --wandb-key ${WANDB_API_KEY}
 )
 
@@ -145,9 +144,8 @@ ray job submit --address="http://127.0.0.1:8265" \
    ${ROLLOUT_ARGS[@]} \
    ${OPTIMIZER_ARGS[@]} \
    ${GRPO_ARGS[@]} \
-   ${DISTRIBUTED_ARGS[@]} \
    ${WANDB_ARGS[@]} \
    ${PERF_ARGS[@]} \
    ${EVAL_ARGS[@]} \
    ${SGLANG_ARGS[@]} \
-   ${MISC_ARGS[@]}
+   ${MISC_ARGS[@]} 

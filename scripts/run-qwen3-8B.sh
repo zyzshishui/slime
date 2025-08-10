@@ -24,15 +24,15 @@ fi
 echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-source "${SCRIPT_DIR}/models/qwen3-4B.sh"
+source "${SCRIPT_DIR}/models/qwen3-8B.sh"
 
 CKPT_ARGS=(
-   --hf-checkpoint /root/Qwen3-4B
-   #--hf-checkpoint /root/Qwen3-4B-FP8
-   --ref-load /root/Qwen3-4B_torch_dist
-   --load /root/Qwen3-4B_slime/
-   --save /root/Qwen3-4B_slime/
-   --save-interval 50
+   --hf-checkpoint /root/Qwen3-8B
+   #--hf-checkpoint /root/Qwen3-8B-FP8
+   --ref-load /root/Qwen3-8B_torch_dist
+   --load /root/Qwen3-8B_slime/
+   --save /root/Qwen3-8B_slime/
+   --save-interval 20
 )
 
 ROLLOUT_ARGS=(
@@ -42,7 +42,7 @@ ROLLOUT_ARGS=(
    --apply-chat-template
    --rollout-shuffle
    --rm-type deepscaler
-   --num-epoch 1
+   --num-rollout 3000
    --rollout-batch-size 32
    --n-samples-per-prompt 8
    --rollout-max-response-len 16384
@@ -50,8 +50,8 @@ ROLLOUT_ARGS=(
 
    --global-batch-size 256
    --balance-data
-   --partial-rollout
-   --over-sampling-batch-size 64
+   # --partial-rollout
+   # --over-sampling-batch-size 48
 )
 
 EVAL_ARGS=(
@@ -76,7 +76,7 @@ PERF_ARGS=(
 
    # --micro-batch-size 1
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 9216
+   --max-tokens-per-gpu 12288
 )
 
 GRPO_ARGS=(
@@ -100,14 +100,14 @@ OPTIMIZER_ARGS=(
 
 WANDB_ARGS=(
    --use-wandb
-   --wandb-project debug
+   --wandb-project qwen-8B
    --wandb-group dapo-h100
    --wandb-key ${WANDB_API_KEY}
 )
 
 SGLANG_ARGS=(
    --rollout-num-gpus-per-engine 2
-   --sglang-mem-fraction-static 0.8
+   --sglang-mem-fraction-static 0.85
 )
 
 MISC_ARGS=(
@@ -123,7 +123,7 @@ MISC_ARGS=(
 
 # launch the master node of ray in container
 export MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
-ray start --head --node-ip-address ${MASTER_ADDR} --num-gpus 8 --disable-usage-stats --dashboard-host=0.0.0.0 --dashboard-port=8265
+ray start --head --node-ip-address ${MASTER_ADDR} --num-gpus 8 --disable-usage-stats
 
 # Build the runtime environment JSON with proper variable substitution
 RUNTIME_ENV_JSON="{
