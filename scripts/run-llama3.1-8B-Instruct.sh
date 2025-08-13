@@ -33,7 +33,7 @@ CKPT_ARGS=(
    --ref-load /root/Llama-3.1-8B-Instruct_torch_dist
    --load /root/Llama-3.1-8B-Instruct_slime/
    --save /root/Llama-3.1-8B-Instruct_slime/
-   --save-interval 20
+   --save-interval 100
 )
 
 ROLLOUT_ARGS=(
@@ -51,12 +51,14 @@ ROLLOUT_ARGS=(
 
    --global-batch-size 256
    --balance-data
+   --partial-rollout
+   --over-sampling-batch-size 64
 )
 
 EVAL_ARGS=(
    --eval-interval 10
    --eval-prompt-data aime /root/aime-2024/aime-2024.jsonl
-   --n-samples-per-eval-prompt 8
+   --n-samples-per-eval-prompt 4
    --eval-max-response-len 16384
    --eval-top-p 0.7
 )
@@ -98,15 +100,15 @@ OPTIMIZER_ARGS=(
 )
 
 WANDB_ARGS=(
-   # --use-wandb
-   # --wandb-project slime-dev
-   # --wandb-group llama3.1-8B
-   # --wandb-key ${WANDB_API_KEY}
+   --use-wandb
+   --wandb-project debug
+   --wandb-group llama3.1-8B-partial
+   --wandb-key ${WANDB_API_KEY}
 )
 
 SGLANG_ARGS=(
    --rollout-num-gpus-per-engine 2
-   --sglang-mem-fraction-static 0.8
+   --sglang-mem-fraction-static 0.75
 )
 
 MISC_ARGS=(
