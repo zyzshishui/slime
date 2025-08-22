@@ -288,19 +288,21 @@ async def generate_rollout_async(args, rollout_id: int, data_source) -> list[lis
     if state.completion_tokens_list:
         completion_tokens_array = np.array(state.completion_tokens_list)
         completion_tokens_stats = {
-            'total_completion_tokens': np.sum(completion_tokens_array).item(),
-            'completion_tokens_mean': np.mean(completion_tokens_array).item(),
-            'completion_tokens_std': np.std(completion_tokens_array).item(),
-            'completion_tokens_count': len(completion_tokens_array),
+            "total_completion_tokens": np.sum(completion_tokens_array).item(),
+            "completion_tokens_mean": np.mean(completion_tokens_array).item(),
+            "completion_tokens_std": np.std(completion_tokens_array).item(),
+            "completion_tokens_count": len(completion_tokens_array),
         }
 
     if len(data) > 0:
-        data[0][0].metadata.update({
-            'rollout_time': rollout_time,
-            'completion_tokens_stats': completion_tokens_stats,
-            'partial_samples': state.partial_samples_count,
-            'total_off_policy_tokens': state.total_off_policy_tokens,
-        })
+        data[0][0].metadata.update(
+            {
+                "rollout_time": rollout_time,
+                "completion_tokens_stats": completion_tokens_stats,
+                "partial_samples": state.partial_samples_count,
+                "total_off_policy_tokens": state.total_off_policy_tokens,
+            }
+        )
     if completion_tokens_stats:
         print(f"[DEBUG] Rollout {rollout_id}: Completion tokens stats: {completion_tokens_stats}", flush=True)
 

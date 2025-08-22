@@ -20,7 +20,7 @@ class Sample:
     reward: Optional[Union[float, dict[str, Any]]] = None
     loss_mask: Optional[list[int]] = None
     completion_tokens: Optional[int] = None
-    
+
     class Status(Enum):
         PENDING = "pending"
         COMPLETED = "completed"
