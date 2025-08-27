@@ -59,7 +59,7 @@ export PYTHONBUFFERED=16
 
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-source "${SCRIPT_DIR}/models/qwen3-4B.sh"
+source "${SCRIPT_DIR}/../../../models/qwen3-4B.sh"
 
 CKPT_ARGS=(
    --hf-checkpoint ${MODEL_DIR}/Qwen3-4B
@@ -71,7 +71,7 @@ CKPT_ARGS=(
 )
 
 ROLLOUT_ARGS=(
-   --prompt-data ${DATA_DIR}/DeepMath-103K/deepmath-103k.jsonl
+   --prompt-data ${DATA_DIR}/DeepScaleR/deepscaler.jsonl
    --input-key prompt
    --label-key label
    --apply-chat-template
@@ -87,8 +87,8 @@ ROLLOUT_ARGS=(
 
    --global-batch-size 256
    --balance-data
-   # --partial-rollout
-   # --over-sampling-batch-size 64
+   --partial-rollout
+   --over-sampling-batch-size 64
 )
 
 EVAL_ARGS=(
@@ -117,7 +117,7 @@ PERF_ARGS=(
 )
 
 GRPO_ARGS=(
-   --advantage-estimator grpo
+   --advantage-estimator gspo
    --use-kl-loss
    --kl-loss-coef 0.00
    --kl-loss-type low_var_kl
@@ -138,7 +138,7 @@ OPTIMIZER_ARGS=(
 WANDB_ARGS=(
    --use-wandb
    --wandb-project 4B-amd
-   --wandb-group deepmath-qwen3-4B
+   --wandb-group deepscaler-qwen3-4B-gspo-partial
    --wandb-key ${WANDB_API_KEY}
 )
 
@@ -166,7 +166,7 @@ MISC_ARGS=(
    --attention-backend flash
    ### AMD Support ###
    # disable gradient accumulation fusion: Need to add apex to enable this
-   # --no-gradient-accumulation-fusion
+   --no-gradient-accumulation-fusion
    ###################
 )
 

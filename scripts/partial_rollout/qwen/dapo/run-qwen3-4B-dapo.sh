@@ -59,7 +59,7 @@ export PYTHONBUFFERED=16
 
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-source "${SCRIPT_DIR}/models/qwen3-4B.sh"
+source "${SCRIPT_DIR}/../../../models/qwen3-4B.sh"
 
 CKPT_ARGS=(
    --hf-checkpoint ${MODEL_DIR}/Qwen3-4B
@@ -71,7 +71,7 @@ CKPT_ARGS=(
 )
 
 ROLLOUT_ARGS=(
-   --prompt-data ${DATA_DIR}/DeepMath-103K/deepmath-103k.jsonl
+   --prompt-data ${DATA_DIR}/dapo-math-17k/dapo-math-17k.jsonl
    --input-key prompt
    --label-key label
    --apply-chat-template
@@ -87,6 +87,7 @@ ROLLOUT_ARGS=(
 
    --global-batch-size 256
    --balance-data
+   --dynamic-sampling-filter-path slime.rollout.filter_hub.dynamic_sampling_filters.check_reward_nonzero_std
    # --partial-rollout
    # --over-sampling-batch-size 64
 )
@@ -138,7 +139,7 @@ OPTIMIZER_ARGS=(
 WANDB_ARGS=(
    --use-wandb
    --wandb-project 4B-amd
-   --wandb-group deepmath-qwen3-4B
+   --wandb-group dapo-qwen3-4B-dapo
    --wandb-key ${WANDB_API_KEY}
 )
 
@@ -166,7 +167,7 @@ MISC_ARGS=(
    --attention-backend flash
    ### AMD Support ###
    # disable gradient accumulation fusion: Need to add apex to enable this
-   # --no-gradient-accumulation-fusion
+   --no-gradient-accumulation-fusion
    ###################
 )
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-# bash scripts/run-qwen3-4B-amd.sh
+# bash scripts/partial_rollout/deepseek/dapo/run-qwen3-4B-dapo-partial.sh
 
 
 ####clear before training
@@ -59,19 +59,19 @@ export PYTHONBUFFERED=16
 
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-source "${SCRIPT_DIR}/models/qwen3-4B.sh"
+source "${SCRIPT_DIR}/../../../models/deepseek-r1-distill-qwen-1.5B.sh"
 
 CKPT_ARGS=(
-   --hf-checkpoint ${MODEL_DIR}/Qwen3-4B
+   --hf-checkpoint ${MODEL_DIR}/DeepSeek-R1-Distill-Qwen-1.5B
    #--hf-checkpoint /root/Qwen3-4B-FP8
-   --ref-load ${MODEL_DIR}/Qwen3-4B_torch
-   --load ${MODEL_DIR}/Qwen3-4B_slime/
-   --save ${MODEL_DIR}/Qwen3-4B_slime/
+   --ref-load ${MODEL_DIR}/DeepSeek-R1-Distill-Qwen-1.5B_torch
+   --load ${MODEL_DIR}/DeepSeek-R1-Distill-Qwen-1.5B_slime/
+   --save ${MODEL_DIR}/DeepSeek-R1-Distill-Qwen-1.5B_slime/
    --save-interval 20000
 )
 
 ROLLOUT_ARGS=(
-   --prompt-data ${DATA_DIR}/DeepMath-103K/deepmath-103k.jsonl
+   --prompt-data ${DATA_DIR}/dapo-math-17k/dapo-math-17k.jsonl
    --input-key prompt
    --label-key label
    --apply-chat-template
@@ -87,8 +87,9 @@ ROLLOUT_ARGS=(
 
    --global-batch-size 256
    --balance-data
-   # --partial-rollout
-   # --over-sampling-batch-size 64
+   --partial-rollout
+   --over-sampling-batch-size 64
+   --dynamic-sampling-filter-path slime.rollout.filter_hub.dynamic_sampling_filters.check_reward_nonzero_std
 )
 
 EVAL_ARGS=(
@@ -138,7 +139,7 @@ OPTIMIZER_ARGS=(
 WANDB_ARGS=(
    --use-wandb
    --wandb-project 4B-amd
-   --wandb-group deepmath-qwen3-4B
+   --wandb-group dapo-deepseek-r1-distill-qwen-1.5B-dapo-partial
    --wandb-key ${WANDB_API_KEY}
 )
 
@@ -166,7 +167,7 @@ MISC_ARGS=(
    --attention-backend flash
    ### AMD Support ###
    # disable gradient accumulation fusion: Need to add apex to enable this
-   # --no-gradient-accumulation-fusion
+   --no-gradient-accumulation-fusion
    ###################
 )
 
