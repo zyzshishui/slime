@@ -1,7 +1,8 @@
 from argparse import Namespace
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from contextlib import nullcontext
 from itertools import accumulate
+from pathlib import Path
 
 import ray
 import torch
@@ -419,6 +420,7 @@ class FSDPTrainRayActor(TrainRayActor):
                 tis = None
                 tis_clipfrac = None
                 ois = None
+                log_tis = None
                 # Apply TIS off-policy correction using importance sampling
                 assert all(
                     "rollout_log_probs" in batch
@@ -430,7 +432,8 @@ class FSDPTrainRayActor(TrainRayActor):
                 rollout_log_probs = torch.cat([batch["rollout_log_probs"] for batch in unpacked_batches], dim=0)
                 rollout_log_probs = rollout_log_probs.to(device=log_probs.device)
 
-                tis = torch.exp(old_log_probs - rollout_log_probs)
+                log_tis = old_log_probs - rollout_log_probs
+                tis = torch.exp(log_tis)
                 ois = (-ppo_kl).exp()
                 tis_clip = torch.clamp(
                     tis, min=getattr(self.args, "tis_clip_low", 0.1), max=getattr(self.args, "tis_clip", 2.0)
@@ -472,8 +475,63 @@ class FSDPTrainRayActor(TrainRayActor):
                 reported["kl_loss"] = kl_loss.detach()
 
             if self.args.use_tis and tis is not None:
-                reported["tis"] = sum_of_sample_mean(tis, response_lengths, loss_masks).detach()
-                reported["ois"] = sum_of_sample_mean(ois, response_lengths, loss_masks).detach()
+                log_tis_for_logging = log_tis.detach().to(dtype=torch.float32)
+                log_tis_splits = log_tis_for_logging.split(response_lengths, dim=0)
+                if getattr(self.args, "log_tis_tokens", False) and dist.get_rank() == 0:
+                    for sample_idx, (tis_seq, mask_seq) in enumerate(zip(log_tis_splits, loss_masks)):
+                        masked_vals = tis_seq[mask_seq > 0]
+                        print(f"TIS sample {sample_idx} log ratios: {masked_vals.detach().cpu().tolist()}")
+                if dist.get_rank() == 0:
+                    diff_path = Path(getattr(self.args, "tis_diff_path", "train_infer_diff.txt"))
+                    diff_path.parent.mkdir(parents=True, exist_ok=True)
+                    with diff_path.open("a", encoding="utf-8") as diff_file:
+                        diff_file.write(
+                            f"step={self.global_step}, micro_step={self.micro_step}, mbs={mbs_id}\n"
+                        )
+                        for sample_idx, (log_seq, mask_seq, sample_batch) in enumerate(
+                            zip(log_tis_splits, loss_masks, unpacked_batches)
+                        ):
+                            mask_bool = mask_seq > 0
+                            if not mask_bool.any().item():
+                                continue
+                            mask_cpu = mask_bool.detach().cpu().bool()
+                            response_len = int(sample_batch["response_lengths"])
+                            if response_len <= 0:
+                                continue
+                            response_tokens = sample_batch["tokens"][-response_len:].cpu()
+                            token_ids = response_tokens[mask_cpu].tolist()
+                            log_scores = log_seq[mask_bool].detach().cpu().tolist()
+                            token_strs = self.tokenizer.convert_ids_to_tokens(token_ids)
+                            for token_id, token_str, score in zip(token_ids, token_strs, log_scores):
+                                diff_file.write(
+                                    f"{sample_idx}\t{token_id}\t{token_str}\t{score}\n"
+                                )
+                        diff_file.write("\n")
+                reported["tis"] = sum_of_sample_mean(log_tis_for_logging, response_lengths, loss_masks).detach()
+                reported["tis_std"] = sum_of_sample_stat(
+                    log_tis_for_logging, response_lengths, loss_masks, lambda vals: vals.std(unbiased=False)
+                ).detach()
+                reported["tis_min"] = sum_of_sample_stat(
+                    log_tis_for_logging, response_lengths, loss_masks, torch.min
+                ).detach()
+                reported["tis_max"] = sum_of_sample_stat(
+                    log_tis_for_logging, response_lengths, loss_masks, torch.max
+                ).detach()
+                reported["tis_p10"] = sum_of_sample_stat(
+                    log_tis_for_logging, response_lengths, loss_masks, lambda vals: torch.quantile(vals, 0.10)
+                ).detach()
+                reported["tis_p30"] = sum_of_sample_stat(
+                    log_tis_for_logging, response_lengths, loss_masks, lambda vals: torch.quantile(vals, 0.30)
+                ).detach()
+                reported["tis_p50"] = sum_of_sample_stat(
+                    log_tis_for_logging, response_lengths, loss_masks, lambda vals: torch.quantile(vals, 0.50)
+                ).detach()
+                reported["tis_p90"] = sum_of_sample_stat(
+                    log_tis_for_logging, response_lengths, loss_masks, lambda vals: torch.quantile(vals, 0.90)
+                ).detach()
+                reported["ois"] = sum_of_sample_mean(
+                    ois.detach().to(dtype=torch.float32), response_lengths, loss_masks
+                ).detach()
                 reported["tis_clipfrac"] = sum_of_sample_mean(
                     tis_clipfrac.float(), response_lengths, loss_masks
                 ).detach()
@@ -702,3 +760,26 @@ def sum_of_sample_mean(x: torch.Tensor, response_lengths: list[int], loss_masks:
             for x_i, loss_mask_i in zip(x.split(response_lengths, dim=0), loss_masks)
         ]
     )
+
+
+def sum_of_sample_stat(
+    x: torch.Tensor,
+    response_lengths: list[int],
+    loss_masks: list[torch.Tensor],
+    stat_fn: Callable[[torch.Tensor], torch.Tensor],
+) -> torch.Tensor:
+    """Sum per-sample statistics computed after masking response tokens."""
+    stats: list[torch.Tensor] = []
+
+    for x_i, loss_mask_i in zip(x.split(response_lengths, dim=0), loss_masks):
+        mask_bool = loss_mask_i > 0
+        if mask_bool.any():
+            masked_vals = x_i[mask_bool]
+            stats.append(stat_fn(masked_vals))
+        else:
+            stats.append(x_i.new_zeros(()))
+
+    if not stats:
+        return x.new_zeros(())
+
+    return torch.stack(stats).sum()
