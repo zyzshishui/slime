@@ -115,6 +115,8 @@ def compute_mis_weights(
     train_log_probs: list[torch.Tensor],
     rollout_log_probs: list[torch.Tensor],
     loss_masks: list[torch.Tensor],
+    total_lengths: Optional[list[int]] = None,
+    response_lengths: Optional[list[int]] = None,
 ) -> Tuple[list[torch.Tensor], Dict[str, list[torch.Tensor]]]:
     """
     Compute the importance sampling (IS) weights and metrics between the inference and training engine.
