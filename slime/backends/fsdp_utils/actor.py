@@ -145,7 +145,6 @@ class FSDPTrainRayActor(TrainRayActor):
         self._latest_checkpoint_iteration: int | None = None
         self.weights = {"actor": {}}
 
-
         self.ref_model = None
         if with_ref:
             self.load_ref_model(args.ref_load)
@@ -193,8 +192,7 @@ class FSDPTrainRayActor(TrainRayActor):
             case _:
                 raise NotImplementedError
 
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
+        torch.cuda.synchronize()
         dist.barrier(group=get_gloo_group())
         print_memory("after offload model")
 
@@ -222,8 +220,7 @@ class FSDPTrainRayActor(TrainRayActor):
             case _:
                 raise NotImplementedError
 
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
+        torch.cuda.synchronize()
         dist.barrier(group=get_gloo_group())
         print_memory("after wake_up model")
 
@@ -233,8 +230,7 @@ class FSDPTrainRayActor(TrainRayActor):
         try:
             return json.loads(path.read_text())
         except json.JSONDecodeError:
-            if dist.get_rank() == 0:
-                print(f"Warning: failed to parse checkpoint metadata at {path}")
+            print(f"Warning: failed to parse checkpoint metadata at {path}")
             return {}
 
     def _write_checkpoint_metadata(self, path: Path, metadata: dict[str, Any]) -> None:
@@ -249,32 +245,22 @@ class FSDPTrainRayActor(TrainRayActor):
 
         root_path = Path(load_root).expanduser()
         if not root_path.exists():
-            if dist.get_rank() == 0:
-                print(f"[FSDP] Checkpoint directory {root_path} not found; skipping load.")
+            print(f"[FSDP] Checkpoint directory {root_path} not found; skipping load.")
             return None
 
         target_step = getattr(self.args, "ckpt_step", None)
         if target_step is None:
             tracker_file = root_path / "latest_checkpointed_iteration.txt"
             if not tracker_file.exists():
-                if dist.get_rank() == 0:
-                    print(f"[FSDP] No tracker file at {tracker_file}; skipping load.")
+                print(f"[FSDP] No tracker file at {tracker_file}; skipping load.")
                 return None
             tracker_text = tracker_file.read_text().strip()
-            try:
-                target_step = int(tracker_text)
-            except ValueError:
-                if dist.get_rank() == 0:
-                    print(
-                        f"[FSDP] Tracker file {tracker_file} does not contain an integer step: '{tracker_text}'."
-                    )
-                return None
+            target_step = int(tracker_text)
 
         checkpoint_dir = root_path / f"iter_{target_step:07d}"
         model_ckpt = checkpoint_dir / "model.pt"
         if not model_ckpt.exists():
-            if dist.get_rank() == 0:
-                print(f"[FSDP] Checkpoint {model_ckpt} not found; skipping load.")
+            print(f"[FSDP] Checkpoint {model_ckpt} not found; skipping load.")
             return None
 
         model_payload = torch.load(model_ckpt, map_location="cpu")
@@ -343,8 +329,7 @@ class FSDPTrainRayActor(TrainRayActor):
                 self.args.start_rollout_id = iteration
         checkpoint_payload["metadata"] = None
 
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
+        torch.cuda.synchronize()
         dist.barrier()
 
     def save_model(self, iteration: int) -> None:
@@ -357,8 +342,7 @@ class FSDPTrainRayActor(TrainRayActor):
         if self.args.debug_rollout_only or self.args.save is None:
             return
 
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
+        torch.cuda.synchronize()
 
         base_dir = Path(self.args.save).expanduser()
         step_id = iteration + 1
@@ -385,8 +369,7 @@ class FSDPTrainRayActor(TrainRayActor):
             torch.save(optimizer_state, checkpoint_dir / "optimizer.pt")
 
             rng_state = {"torch": torch.get_rng_state()}
-            if torch.cuda.is_available():
-                rng_state["cuda"] = torch.cuda.get_rng_state_all()
+            rng_state["cuda"] = torch.cuda.get_rng_state_all()
             torch.save(rng_state, checkpoint_dir / "rng.pt")
 
             metadata = {
