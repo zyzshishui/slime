@@ -264,9 +264,7 @@ class FSDPTrainRayActor(TrainRayActor):
             return None
 
         model_payload = torch.load(model_ckpt, map_location="cpu")
-        if isinstance(model_payload, dict) and any(
-            isinstance(v, torch.Tensor) for v in model_payload.values()
-        ):
+        if isinstance(model_payload, dict) and any(isinstance(v, torch.Tensor) for v in model_payload.values()):
             model_state = model_payload
         else:
             model_state = model_payload.get("model", {})
