@@ -30,7 +30,7 @@ def prepare():
 def execute():
     ckpt_args = (
         f"--hf-checkpoint /root/models/{MODEL_NAME} "
-        # "--ref-load /root/models/{MODEL_NAME} "
+        # f"--ref-load /root/models/{MODEL_NAME} "
     )
 
     rollout_args = (
