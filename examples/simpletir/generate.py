@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import copy
-import os
-import re
 from typing import Any
 
 from slime.rollout.sglang_rollout import GenerateState, generate
@@ -10,19 +8,7 @@ from slime.utils.types import Sample
 
 from .dataset import get_dataset, get_dataset_from_path
 from .reward import compute_rule_reward
-from .text_utils import truncate_content
 
-try:
-    if os.getenv("SANDBOX_ENDPOINT"):
-        from .sandbox.local_sandbox import parallel_sandbox
-    else:
-        from .sandbox.internal_sandbox import parallel_sandbox
-except Exception:  # noqa: BLE001 - optional dependency
-    parallel_sandbox = None
-
-
-MAX_OBS_CHARS = 512
-CODE_PATTERN = re.compile(r"```(?:py|python)?\n(.*?)```", re.DOTALL)
 SIMPLETIR_CONFIG = {
     "max_turns": 5,
     "mask_void_turns": True,
@@ -50,27 +36,8 @@ def _render_prompt(tokenizer, messages: list[dict[str, str]]) -> str:
         return "\n".join(rendered)
 
 
-async def _run_code(code: str):
-    if parallel_sandbox is None:
-        return {"success": False, "stdout": "", "stderr": "Sandbox not configured."}
-
-    try:
-        success_list, stdout_list, stderr_list = await parallel_sandbox([code])
-    except Exception as exc:  # noqa: BLE001
-        return {"success": False, "stdout": "", "stderr": f"Sandbox failure: {exc}"}
-
-    stdout = stdout_list[0] if stdout_list else ""
-    stderr = stderr_list[0] if stderr_list else ""
-    success = bool(success_list and success_list[0])
-    return {
-        "success": success,
-        "stdout": truncate_content(stdout, MAX_OBS_CHARS) if stdout else "",
-        "stderr": truncate_content(stderr, MAX_OBS_CHARS) if stderr else "",
-    }
-
-
 async def custom_generate(args, sample: Sample, sampling_params: dict[str, Any]) -> Sample:
-    """Generate multi-turn SimpleTIR rollouts with optional sandbox execution."""
+    """Generate multi-turn SimpleTIR rollouts."""
     tokenizer = _get_tokenizer(args)
     metadata = sample.metadata if isinstance(sample.metadata, dict) else {}
     if metadata is None:
@@ -131,9 +98,6 @@ async def custom_generate(args, sample: Sample, sampling_params: dict[str, Any])
 
     turns_taken = 0
     void_turns = 0
-    code_turns = 0
-    successful_code = 0
-    sandbox_logs: list[dict[str, Any]] = []
 
     for turn in range(max_turns):
         turns_taken = turn + 1
@@ -163,31 +127,6 @@ async def custom_generate(args, sample: Sample, sampling_params: dict[str, Any])
         response_budget -= max(generated_tokens, 0)
 
         boxed_answer = "\\boxed{" in response_text
-        code_blocks = CODE_PATTERN.findall(response_text)
-
-        if code_blocks:
-            code_turns += 1
-            execution = await _run_code(code_blocks[-1])
-            successful_code += int(execution["success"])
-            sandbox_logs.append({"turn": turn, **execution})
-
-            obs_budget_tokens = 0
-            if execution["stderr"]:
-                observation = f"\nCode execution result: {truncate_content(execution['stderr'], MAX_OBS_CHARS)}\n"
-            elif execution["stdout"]:
-                observation = f"\nCode execution result: {truncate_content(execution['stdout'], MAX_OBS_CHARS)}\n"
-            else:
-                observation = "\nCode execution result: \n"
-
-            messages.append({"role": "user", "content": observation})
-            obs_budget_tokens = len(tokenizer(observation, add_special_tokens=False)["input_ids"])
-            response_budget -= obs_budget_tokens
-            if boxed_answer:
-                break
-            if response_budget <= 0:
-                sample.status = Sample.Status.TRUNCATED
-                break
-            continue
 
         if not response_text.strip():
             void_turns += 1
@@ -209,15 +148,10 @@ async def custom_generate(args, sample: Sample, sampling_params: dict[str, Any])
         {
             "turns_taken": turns_taken,
             "void_turns": void_turns,
-            "code_turns": code_turns,
-            "successful_code": successful_code,
             "response_budget_remaining": max(response_budget, 0),
             "response_budget_initial": initial_response_budget,
         }
     )
-    if sandbox_logs:
-        metadata["sandbox_logs"] = sandbox_logs
-
     if record.ground_truth:
         reward = compute_rule_reward(record, sample)
         if reward is not None:

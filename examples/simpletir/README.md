@@ -4,15 +4,10 @@ This directory contains the components required to experiment with the
 SimpleTIR tasks inside `slime`. The integration currently covers:
 
 - Loading the official SimpleTIR parquet datasets (train / eval).
-- Multi-turn rollouts that execute Python code blocks inside a sandbox and
-  feed observations back to the model.
-- Verifier rewards: math answers are checked with `math_verify`; code tasks
-  execute the model output inside a sandbox and compare stdout against the
-  official tests (see `examples/simpletir/reward_score/`).
+- Multi-turn rollouts with math reasoning prompts from the official release.
+- Verifier rewards: math answers are checked with `math_verify`.
 - Hook points (`custom_generate_function_path`, `custom_rm_path`) so that
   rollouts plug into the standard `slime` training entrypoint.
-- Optional sandbox helpers for executing Python snippets inside a Firejail-
-  style environment (see `sandbox/README.md`).
 
 ### Data preparation
 
@@ -46,11 +41,7 @@ SimpleTIR tasks inside `slime`. The integration currently covers:
      ...
    ```
 
-2. If you wish to execute model-generated code, run a sandbox service and
-   set `SANDBOX_ENDPOINT=http://host:port/faas/sandbox/`. The helpers in
-   `examples/simpletir/sandbox/` provide a reference FastAPI implementation.
-
-3. (Optional) Use `examples/simpletir/run_simpletir.sh` as a starting point
+2. (Optional) Use `examples/simpletir/run_simpletir.sh` as a starting point
    for launching Ray + `train.py`. The script mirrors the stock
    `scripts/run-qwen3-4B.sh`; edit the hard-coded paths inside the file if you
    need to point at different checkpoints or datasets.

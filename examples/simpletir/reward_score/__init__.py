@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from . import code
-
 try:  # pragma: no cover - optional dependency
     from . import hf_math_verify
 
@@ -30,7 +28,4 @@ async def compute_reward_async(
                 "Please install the optional dependency or remove the math datasets."
             ) from _HF_IMPORT_ERROR
         return hf_math_verify.compute_score(solution, ground_truth)
-    if "code" in data_source or "LeetCodeDataset" in data_source:
-        return await code.compute_score_async(solution, ground_truth, extra_info=extra_info)
-
     raise ValueError(f"Unknown data source: {data_source}")
