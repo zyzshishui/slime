@@ -8,6 +8,18 @@ import pandas as pd
 from .data_utils import ensure_metadata_dict, normalize_prompt, normalize_reward_model
 
 
+def _render_messages(tokenizer, messages: list[dict[str, Any]]) -> str:
+    try:
+        return tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+    except Exception:  # noqa: BLE001
+        rendered = []
+        for msg in messages:
+            role = msg.get("role", "user").capitalize()
+            rendered.append(f"{role}: {msg.get('content', '')}")
+        rendered.append("Assistant:")
+        return "\n".join(rendered)
+
+
 @dataclass
 class SimpleTIRRecord:
     prompt: list[dict[str, Any]]
@@ -47,6 +59,14 @@ class SimpleTIRDataset:
         self._df["extra_info"] = self._df["extra_info"].apply(ensure_metadata_dict)
 
         # Build lookup tables
+        self._max_prompt_tokens_filtered: int | None = None
+
+        self._rebuild_indices()
+
+    def __len__(self) -> int:
+        return len(self._df)
+
+    def _rebuild_indices(self):
         self._df = self._df.reset_index(drop=True)
         self._df["__row_id__"] = self._df.index
         self._extra_index_to_row_id: dict[int, int] = {}
@@ -57,8 +77,28 @@ class SimpleTIRDataset:
             if idx is not None:
                 self._extra_index_to_row_id[int(idx)] = int(row_id)
 
-    def __len__(self) -> int:
-        return len(self._df)
+    def ensure_prompt_limit(self, tokenizer, max_tokens: int | None):
+        if max_tokens is None or max_tokens <= 0:
+            return
+        if self._max_prompt_tokens_filtered == max_tokens:
+            return
+
+        keep_indices = []
+        for row_id, prompt in enumerate(self._df["prompt"]):
+            messages = prompt or [{"role": "user", "content": ""}]
+            prompt_text = _render_messages(tokenizer, messages)
+            length = len(tokenizer(prompt_text, add_special_tokens=False)["input_ids"])
+            if length <= max_tokens:
+                keep_indices.append(row_id)
+
+        if not keep_indices:
+            raise ValueError(
+                f"No SimpleTIR samples remain after enforcing prompt length <= {max_tokens} tokens."
+            )
+
+        self._df = self._df.iloc[keep_indices]
+        self._rebuild_indices()
+        self._max_prompt_tokens_filtered = max_tokens
 
     @functools.lru_cache(maxsize=8192)
     def get_record(self, *, row_id: int | None = None, extra_index: int | None = None) -> SimpleTIRRecord:
@@ -101,18 +141,14 @@ def get_dataset(args, *, split: str) -> SimpleTIRDataset:
     if split not in ("train", "eval"):
         raise ValueError(f"Unknown split {split!r} for SimpleTIR dataset.")
 
-    key = getattr(args, f"simpletir_{split}_data", None)
+    if split == "train":
+        key = getattr(args, "prompt_data", None)
+    else:
+        key = getattr(args, "eval_prompt_data", None)
+        if isinstance(key, list) and key:
+            key = key[1] if len(key) >= 2 else key[0]
     if key is None:
-        if split == "train":
-            key = getattr(args, "prompt_data", None)
-        else:
-            key = getattr(args, "eval_prompt_data", None)
-            if isinstance(key, list) and key:
-                # eval prompt data is [name, path, name, path, ...]; pick paths
-                key = key[1] if len(key) >= 2 else key[0]
-        if key is None:
-            raise ValueError(
-                f"--simpletir-{split}-data (or --{'prompt-data' if split == 'train' else 'eval-prompt-data'}) must be provided."
-            )
-
+        raise ValueError(
+            f"--{'prompt-data' if split == 'train' else 'eval-prompt-data'} must be provided for SimpleTIR integration."
+        )
     return get_dataset_from_path(key, split=split)

@@ -23,6 +23,10 @@ except Exception:  # noqa: BLE001 - optional dependency
 
 MAX_OBS_CHARS = 512
 CODE_PATTERN = re.compile(r"```(?:py|python)?\n(.*?)```", re.DOTALL)
+SIMPLETIR_CONFIG = {
+    "max_turns": 5,
+    "mask_void_turns": True,
+}
 
 
 def _get_tokenizer(args):
@@ -79,6 +83,9 @@ async def custom_generate(args, sample: Sample, sampling_params: dict[str, Any])
     else:
         dataset = get_dataset(args, split="train")
 
+    max_prompt_tokens = getattr(args, "rollout_max_prompt_len", None)
+    dataset.ensure_prompt_limit(tokenizer, max_prompt_tokens)
+
     record = None
     if "index" in metadata:
         try:
@@ -112,8 +119,15 @@ async def custom_generate(args, sample: Sample, sampling_params: dict[str, Any])
             sample.metadata.setdefault("rm_type", "math")
 
     messages = copy.deepcopy(record.prompt) or [{"role": "user", "content": ""}]
-    max_turns = getattr(args, "simpletir_max_turns", 4)
-    mask_void_turns = getattr(args, "simpletir_mask_void_turns", True)
+    max_turns = SIMPLETIR_CONFIG["max_turns"]
+    mask_void_turns = SIMPLETIR_CONFIG["mask_void_turns"]
+
+    base_sampling_params = dict(sampling_params or {})
+    response_budget = base_sampling_params.get("max_new_tokens")
+    if response_budget is None:
+        response_budget = getattr(args, "rollout_max_response_len", 0)
+    response_budget = int(response_budget or 0)
+    initial_response_budget = response_budget
 
     turns_taken = 0
     void_turns = 0
@@ -123,8 +137,15 @@ async def custom_generate(args, sample: Sample, sampling_params: dict[str, Any])
 
     for turn in range(max_turns):
         turns_taken = turn + 1
+        if response_budget <= 0:
+            sample.status = Sample.Status.TRUNCATED
+            break
+
         prompt_text = _render_prompt(tokenizer, messages)
         prompt_ids = tokenizer(prompt_text, add_special_tokens=False)["input_ids"]
+
+        current_sampling_params = dict(base_sampling_params)
+        current_sampling_params["max_new_tokens"] = max(response_budget, 0)
 
         sample.tokens = prompt_ids
         sample.response = ""
@@ -134,9 +155,12 @@ async def custom_generate(args, sample: Sample, sampling_params: dict[str, Any])
         sample.prompt = prompt_text
         sample.status = Sample.Status.PENDING
 
-        sample = await generate(args, sample, sampling_params)
+        sample = await generate(args, sample, current_sampling_params)
         response_text = sample.response or ""
         messages.append({"role": "assistant", "content": response_text})
+
+        generated_tokens = sample.response_length or max(len(sample.tokens) - len(prompt_ids), 0)
+        response_budget -= max(generated_tokens, 0)
 
         boxed_answer = "\\boxed{" in response_text
         code_blocks = CODE_PATTERN.findall(response_text)
@@ -147,6 +171,7 @@ async def custom_generate(args, sample: Sample, sampling_params: dict[str, Any])
             successful_code += int(execution["success"])
             sandbox_logs.append({"turn": turn, **execution})
 
+            obs_budget_tokens = 0
             if execution["stderr"]:
                 observation = f"\nCode execution result: {truncate_content(execution['stderr'], MAX_OBS_CHARS)}\n"
             elif execution["stdout"]:
@@ -155,7 +180,12 @@ async def custom_generate(args, sample: Sample, sampling_params: dict[str, Any])
                 observation = "\nCode execution result: \n"
 
             messages.append({"role": "user", "content": observation})
+            obs_budget_tokens = len(tokenizer(observation, add_special_tokens=False)["input_ids"])
+            response_budget -= obs_budget_tokens
             if boxed_answer:
+                break
+            if response_budget <= 0:
+                sample.status = Sample.Status.TRUNCATED
                 break
             continue
 
@@ -165,6 +195,10 @@ async def custom_generate(args, sample: Sample, sampling_params: dict[str, Any])
                 break
 
         if boxed_answer:
+            break
+
+        if response_budget <= 0:
+            sample.status = Sample.Status.TRUNCATED
             break
 
         # No tool use and no final answer – exit to avoid empty loops.
@@ -177,6 +211,8 @@ async def custom_generate(args, sample: Sample, sampling_params: dict[str, Any])
             "void_turns": void_turns,
             "code_turns": code_turns,
             "successful_code": successful_code,
+            "response_budget_remaining": max(response_budget, 0),
+            "response_budget_initial": initial_response_budget,
         }
     )
     if sandbox_logs:

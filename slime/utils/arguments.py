@@ -462,37 +462,6 @@ def get_slime_extra_args_provider(add_custom_arguments=None):
             )
 
             parser.add_argument(
-                "--simpletir-train-data",
-                type=str,
-                default=None,
-                help=(
-                    "Path to the SimpleTIR training dataset in parquet format. "
-                    "If omitted, defaults to --prompt-data."
-                ),
-            )
-            parser.add_argument(
-                "--simpletir-eval-data",
-                type=str,
-                default=None,
-                help=(
-                    "Path to the SimpleTIR evaluation dataset in parquet format. "
-                    "If omitted, defaults to --eval-prompt-data."
-                ),
-            )
-            parser.add_argument(
-                "--simpletir-max-turns",
-                type=int,
-                default=4,
-                help="Maximum number of reasoning turns for SimpleTIR rollouts.",
-            )
-            parser.add_argument(
-                "--simpletir-mask-void-turns",
-                action=argparse.BooleanOptionalAction,
-                default=True,
-                help="Stop multi-turn rollouts early when a turn produces no content.",
-            )
-
-            parser.add_argument(
                 "--start-rollout-id",
                 type=int,
                 default=None,

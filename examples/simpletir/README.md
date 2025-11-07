@@ -41,9 +41,8 @@ SimpleTIR tasks inside `slime`. The integration currently covers:
      --custom-generate-function-path examples.simpletir.generate.custom_generate \
      --custom-rm-path examples.simpletir.reward.async_reward \
      --prompt-data /path/to/train.parquet \
+     --eval-prompt-data simpletir_eval /path/to/eval.parquet \
      --metadata-key extra_info \
-     --simpletir-train-data /path/to/train.parquet \
-     --simpletir-eval-data /path/to/eval.parquet \
      ...
    ```
 
@@ -52,9 +51,9 @@ SimpleTIR tasks inside `slime`. The integration currently covers:
    `examples/simpletir/sandbox/` provide a reference FastAPI implementation.
 
 3. (Optional) Use `examples/simpletir/run_simpletir.sh` as a starting point
-   for launching Ray + `train.py`. The script accepts overrides via
-   environment variables such as `DATA_ROOT`, `TRAIN_DATA`, `HF_CHECKPOINT`,
-   etc., and keeps all SimpleTIR-specific options scoped to this directory.
+   for launching Ray + `train.py`. The script mirrors the stock
+   `scripts/run-qwen3-4B.sh`; edit the hard-coded paths inside the file if you
+   need to point at different checkpoints or datasets.
 
 ### Status
 

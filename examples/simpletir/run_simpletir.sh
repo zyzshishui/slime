@@ -34,9 +34,6 @@ ROLLOUT_ARGS=(
   --balance-data
   --custom-generate-function-path examples.simpletir.generate.custom_generate
   --custom-rm-path examples.simpletir.reward.async_reward
-  --simpletir-train-data /root/datasets/simpletir/deepscaler_train.jsonl
-  --simpletir-max-turns 5
-  --simpletir-mask-void-turns
 )
 
 EVAL_ARGS=(
@@ -44,7 +41,6 @@ EVAL_ARGS=(
   --n-samples-per-eval-prompt 8
   --eval-max-response-len 16384
   --eval-interval 10
-  --simpletir-eval-data /root/datasets/simpletir/deepscaler_aime.jsonl
 )
 
 PERF_ARGS=(
@@ -82,10 +78,10 @@ OPTIMIZER_ARGS=(
 )
 
 WANDB_ARGS=(
-  # --use-wandb
-  # --wandb-project simpletir
-  # --wandb-group simpletir_qwen2.5-3B
-  # --wandb-key ${WANDB_KEY}
+  --use-wandb
+  --wandb-project simpletir
+  --wandb-group simpletir_qwen2.5-3B
+  --wandb-key ${WANDB_KEY}
 )
 
 SGLANG_ARGS=(
