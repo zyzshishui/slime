@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import copy
+import re
+import sys
 from typing import Any
 
 from slime.rollout.sglang_rollout import GenerateState, generate
@@ -8,6 +11,11 @@ from slime.utils.types import Sample
 
 from .dataset import get_dataset, get_dataset_from_path
 from .reward import compute_rule_reward
+from .text_utils import truncate_content
+
+MAX_OBS_CHARS = 512
+SANDBOX_RUN_TIMEOUT = 5.0
+CODE_PATTERN = re.compile(r"```(?:python|py)?\n(.*?)```", re.DOTALL)
 
 SIMPLETIR_CONFIG = {
     "max_turns": 5,
@@ -34,6 +42,40 @@ def _render_prompt(tokenizer, messages: list[dict[str, str]]) -> str:
             rendered.append(f"{role}: {msg.get('content', '')}")
         rendered.append("Assistant:")
         return "\n".join(rendered)
+
+
+async def _run_code(code: str) -> dict[str, Any]:
+    """Execute a python snippet locally with a short timeout."""
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-u",
+        "-c",
+        code,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=SANDBOX_RUN_TIMEOUT)
+        timed_out = False
+    except asyncio.TimeoutError:
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+        stdout, stderr = await proc.communicate()
+        timed_out = True
+
+    success = proc.returncode == 0 and not timed_out
+    stdout_text = stdout.decode("utf-8", errors="ignore")
+    stderr_text = stderr.decode("utf-8", errors="ignore")
+    if timed_out:
+        stderr_text = (stderr_text or "") + "\n<TIMEOUT>"
+    return {
+        "success": success,
+        "stdout": truncate_content(stdout_text, MAX_OBS_CHARS) if stdout_text else "",
+        "stderr": truncate_content(stderr_text, MAX_OBS_CHARS) if stderr_text else "",
+    }
 
 
 async def custom_generate(args, sample: Sample, sampling_params: dict[str, Any]) -> Sample:
@@ -98,6 +140,9 @@ async def custom_generate(args, sample: Sample, sampling_params: dict[str, Any])
 
     turns_taken = 0
     void_turns = 0
+    code_turns = 0
+    successful_code = 0
+    sandbox_logs: list[dict[str, Any]] = []
 
     for turn in range(max_turns):
         turns_taken = turn + 1
@@ -127,6 +172,30 @@ async def custom_generate(args, sample: Sample, sampling_params: dict[str, Any])
         response_budget -= max(generated_tokens, 0)
 
         boxed_answer = "\\boxed{" in response_text
+        code_blocks = CODE_PATTERN.findall(response_text)
+
+        if code_blocks:
+            code_turns += 1
+            execution = await _run_code(code_blocks[-1])
+            successful_code += int(execution["success"])
+            sandbox_logs.append({"turn": turn, **execution})
+
+            if execution["stderr"]:
+                observation = f"\nCode execution result: {execution['stderr']}\n"
+            elif execution["stdout"]:
+                observation = f"\nCode execution result: {execution['stdout']}\n"
+            else:
+                observation = "\nCode execution result: \n"
+
+            messages.append({"role": "user", "content": observation})
+            obs_budget_tokens = len(tokenizer(observation, add_special_tokens=False)["input_ids"])
+            response_budget -= obs_budget_tokens
+            if boxed_answer:
+                break
+            if response_budget <= 0:
+                sample.status = Sample.Status.TRUNCATED
+                break
+            continue
 
         if not response_text.strip():
             void_turns += 1
@@ -148,10 +217,14 @@ async def custom_generate(args, sample: Sample, sampling_params: dict[str, Any])
         {
             "turns_taken": turns_taken,
             "void_turns": void_turns,
+            "code_turns": code_turns,
+            "successful_code": successful_code,
             "response_budget_remaining": max(response_budget, 0),
             "response_budget_initial": initial_response_budget,
         }
     )
+    if sandbox_logs:
+        metadata["sandbox_logs"] = sandbox_logs
     if record.ground_truth:
         reward = compute_rule_reward(record, sample)
         if reward is not None:

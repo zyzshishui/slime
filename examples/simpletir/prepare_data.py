@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import textwrap
 from pathlib import Path
 from typing import Iterable
 
@@ -16,6 +17,32 @@ else:  # pragma: no cover - support execution via `python path/to/script.py`
 
     sys.path.append(str(Path(__file__).resolve().parents[2]))
     from examples.simpletir.data_utils import ensure_metadata_dict, normalize_prompt, normalize_reward_model
+
+
+SYSTEM_PROMPT = textwrap.dedent(
+    """
+    Solve the following problem step by step. You now have the ability to selectively write executable Python code to enhance your reasoning process. The Python code will be executed by an external sandbox, and the output (after "Code execution result: ") is returned to aid your reasoning and help you arrive at the final answer. The Python code should be complete scripts, including necessary imports.
+    Code Format:
+    Each code snippet is wrapped between ```. You need to use `print()` to output intermediate results.
+    Answer Format:
+    You can use the `final_answer()` function in the code to return your final answer. For example, to answer the User Question: What is the result of the 5 + 3 + 1294.678?, you can write:
+    ```py
+    answer = 5 + 3 + 1294.678
+    final_answer(answer)
+    ```
+    You can also use \\boxed to return your answer. The last part of your response should be:
+    \\boxed{'The final answer goes here.'}
+    User Question:
+    """
+).strip()
+
+
+def ensure_system_prompt(messages: list[dict[str, str]]) -> list[dict[str, str]]:
+    if messages and (messages[0].get("role") == "system"):
+        content = (messages[0].get("content") or "").strip()
+        if content == SYSTEM_PROMPT:
+            return messages
+    return [{"role": "system", "content": SYSTEM_PROMPT}] + messages
 
 
 def _stringify_ground_truth(value):
@@ -53,8 +80,10 @@ def convert_file(dataset_name: str, parquet_path: Path, output_path: Path):
                 "simpletir_dataset_spec", f"{dataset_name}/{split_name}"
             )
             extra_info["simpletir_dataset_path"] = str(output_path)
+            prompt = normalize_prompt(row.get("prompt"))
+            prompt = ensure_system_prompt(prompt)
             record = {
-                "prompt": normalize_prompt(row.get("prompt")),
+                "prompt": prompt,
                 "label": _stringify_ground_truth(reward_model.get("ground_truth")),
                 "extra_info": {
                     **extra_info,
