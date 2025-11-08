@@ -37,7 +37,12 @@ SYSTEM_PROMPT = textwrap.dedent(
 ).strip()
 
 
-def ensure_system_prompt(messages: list[dict[str, str]]) -> list[dict[str, str]]:
+TRAIN_SPLITS_WITH_SYSTEM = {("deepscaler", "train"), ("simplelr_math_35", "train")}
+
+
+def ensure_system_prompt(messages: list[dict[str, str]], *, enabled: bool = True) -> list[dict[str, str]]:
+    if not enabled:
+        return messages
     if messages and (messages[0].get("role") == "system"):
         content = (messages[0].get("content") or "").strip()
         if content == SYSTEM_PROMPT:
@@ -67,6 +72,7 @@ def discover_parquet_files(source_dir: Path, include: set[str] | None) -> Iterab
 def convert_file(dataset_name: str, parquet_path: Path, output_path: Path):
     df = pd.read_parquet(parquet_path)
     split_name = parquet_path.stem
+    inject_system_prompt = (dataset_name, split_name) in TRAIN_SPLITS_WITH_SYSTEM
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8") as fout:
         for row_id, row in enumerate(df.to_dict(orient="records")):
@@ -81,7 +87,7 @@ def convert_file(dataset_name: str, parquet_path: Path, output_path: Path):
             )
             extra_info["simpletir_dataset_path"] = str(output_path)
             prompt = normalize_prompt(row.get("prompt"))
-            prompt = ensure_system_prompt(prompt)
+            prompt = ensure_system_prompt(prompt, enabled=inject_system_prompt)
             record = {
                 "prompt": prompt,
                 "label": _stringify_ground_truth(reward_model.get("ground_truth")),
