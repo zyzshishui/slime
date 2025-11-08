@@ -92,9 +92,7 @@ class SimpleTIRDataset:
                 keep_indices.append(row_id)
 
         if not keep_indices:
-            raise ValueError(
-                f"No SimpleTIR samples remain after enforcing prompt length <= {max_tokens} tokens."
-            )
+            raise ValueError(f"No SimpleTIR samples remain after enforcing prompt length <= {max_tokens} tokens.")
 
         self._df = self._df.iloc[keep_indices]
         self._rebuild_indices()

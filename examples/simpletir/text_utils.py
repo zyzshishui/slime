@@ -6,4 +6,3 @@ def truncate_content(text: str, limit: int = 512) -> str:
         return text
     half = max(limit // 2, 1)
     return f"{text[:half]}\n... _truncated_ ...\n{text[-half:]}"
-

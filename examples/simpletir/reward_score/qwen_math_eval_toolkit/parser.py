@@ -269,11 +269,7 @@ def clean_float_text(string: str) -> str:
 
     string = string.replace("\\ ", "")
 
-    if (
-        string
-        and string[0] == "."
-        and (len(string) == 1 or (string[1].isdigit() and "." not in string[1:]))
-    ):
+    if string and string[0] == "." and (len(string) == 1 or (string[1].isdigit() and "." not in string[1:])):
         string = "0" + string
 
     return string
