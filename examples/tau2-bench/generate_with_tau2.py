@@ -6,6 +6,7 @@ Configure the domain/task split below, point slime at this file via
 """
 
 import logging
+import os
 from typing import Any, Dict
 
 from slime.utils.types import Sample
@@ -28,6 +29,8 @@ TAU2_CONFIGS: Dict[str, Any] = {
 
 # Replace with your actual API key for user simulator (LiteLLM)
 API_KEY = "NONE"
+if API_KEY == "NONE":
+    API_KEY = os.getenv("OPENAI_API_KEY")
 # Also pass through args to force gemini path
 TAU2_CONFIGS["user_llm_args"] = {"api_key": API_KEY}
 
